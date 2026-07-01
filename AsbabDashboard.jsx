@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Send, CheckCircle2, Package, Clock, Search, ImagePlus, X, Trash2, Pencil, Loader2 } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Send, CheckCircle2, Package, Clock, Search, ImagePlus, X, Trash2, Pencil, Loader2, Paperclip } from "lucide-react";
 
 // ---- CONFIG -----------------------------------------------------------
 const API_BASE = "https://asbab-backend-production.up.railway.app";
@@ -41,108 +41,28 @@ function StatusPill({ status }) {
   );
 }
 
-// Simple form: an image + the raw message, exactly as the moderator would
-// type or paste it in Telegram. Nothing else. Claude reads this message in
-// the background (on the backend) only when "Send to Courier" is pressed.
-function EntryForm({ initial, onCancel, onSave, saving }) {
-  const [rawText, setRawText] = useState(initial?.rawText || "");
-  const [moderator, setModerator] = useState(initial?.moderator || "");
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(initial?.imageUrl || null);
-
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  };
-
-  return (
-    <div className="space-y-3">
-      <div>
-        <label className="text-[11px] text-[#8a7a5c] mb-1 block">প্রোডাক্ট ছবি</label>
-        <label className="flex items-center justify-center h-48 rounded-lg border border-dashed border-[#3a3226] bg-[#0f0d0a] cursor-pointer overflow-hidden">
-          {imagePreview ? (
-            <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex flex-col items-center gap-1 text-[#5c5342]">
-              <ImagePlus size={22} />
-              <span className="text-xs">ছবি সিলেক্ট করুন</span>
-            </div>
-          )}
-          <input type="file" accept="image/*" onChange={handleFile} className="hidden" />
-        </label>
-      </div>
-
-      <div>
-        <label className="text-[11px] text-[#8a7a5c] mb-1 block">
-          মেসেজ লিখুন / পেস্ট করুন
-        </label>
-        <textarea
-          value={rawText}
-          onChange={(e) => setRawText(e.target.value)}
-          rows={8}
-          placeholder={"7419\nHata:-26\nLong=52\nফুল সেট\n\nরায়হান\nলাকসাম কুমিল্লা\n01886600494\nবিল ২১০০ টাকা"}
-          className="w-full bg-[#0f0d0a] border border-[#3a3226] rounded-lg px-3 py-2.5 text-sm text-[#f2ede4] placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a] resize-none"
-        />
-      </div>
-
-      <div>
-        <label className="text-[11px] text-[#8a7a5c] mb-1 block">মডারেটর</label>
-        <input
-          value={moderator}
-          onChange={(e) => setModerator(e.target.value)}
-          placeholder="Ayesha"
-          className="w-full bg-[#0f0d0a] border border-[#3a3226] rounded-lg px-3 py-2.5 text-sm text-[#f2ede4] placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a]"
-        />
-      </div>
-
-      <div className="flex gap-2 pt-2">
-        <button
-          onClick={onCancel}
-          className="flex-1 bg-[#1c1913] border border-[#3a3226] text-[#8a7a5c] font-medium text-sm py-3 rounded-xl"
-        >
-          বাতিল
-        </button>
-        <button
-          onClick={() => onSave({ rawText, moderator }, imageFile)}
-          disabled={saving || !rawText.trim()}
-          className="flex-1 flex items-center justify-center gap-2 bg-[#b8935a] hover:bg-[#c9a56d] disabled:opacity-60 text-[#0f0d0a] font-medium text-sm py-3 rounded-xl transition-colors"
-        >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : null}
-          সেভ করুন
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="w-full sm:max-w-sm max-h-[90vh] overflow-y-auto bg-[#1a1712] border border-[#3a3226] rounded-t-2xl sm:rounded-2xl">
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-[#2a251d] sticky top-0 bg-[#1a1712]">
-          <h3 className="font-serif text-lg text-[#f2ede4]">{title}</h3>
-          <button onClick={onClose} className="text-[#8a7a5c] hover:text-[#f2ede4]">
-            <X size={20} />
-          </button>
-        </div>
-        <div className="px-5 py-4">{children}</div>
-      </div>
-    </div>
-  );
-}
-
 export default function AsbabDashboard() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showNew, setShowNew] = useState(false);
-  const [editEntry, setEditEntry] = useState(null);
   const [sendingId, setSendingId] = useState(null);
-  const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState("");
+
+  // Moderator identity — set once, remembered on this device, attached
+  // silently to every entry (no field to fill each time).
+  const [moderator, setModerator] = useState(
+    () => localStorage.getItem("asbab_moderator") || ""
+  );
+
+  // Telegram-style compose bar state
+  const [text, setText] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const showToast = (msg) => {
     setToast(msg);
@@ -167,47 +87,88 @@ export default function AsbabDashboard() {
     loadEntries();
   }, []);
 
-  const handleCreate = async (form, imageFile) => {
-    setSaving(true);
-    try {
-      let imageUrl = null;
-      if (imageFile) imageUrl = await uploadImageToCloudinary(imageFile);
-      const res = await fetch(`${API_BASE}/api/entries`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, imageUrl }),
-      });
-      if (!res.ok) throw new Error();
-      const created = await res.json();
-      setEntries((prev) => [created, ...prev]);
-      setShowNew(false);
-      showToast("নতুন এন্ট্রি যোগ হয়েছে");
-    } catch {
-      showToast("এন্ট্রি সেভ করা যায়নি");
-    } finally {
-      setSaving(false);
+  const promptForModerator = () => {
+    const name = window.prompt("আপনার নাম লিখুন (একবারই লাগবে):", moderator);
+    if (name && name.trim()) {
+      setModerator(name.trim());
+      localStorage.setItem("asbab_moderator", name.trim());
     }
   };
 
-  const handleEditSave = async (form, imageFile) => {
-    setSaving(true);
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const autosize = (e) => {
+    setText(e.target.value);
+    const el = e.target;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+  };
+
+  const startEdit = (entry) => {
+    setEditingId(entry.id);
+    setText(entry.rawText || "");
+    setImagePreview(entry.imageUrl || null);
+    setImageFile(null);
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    setTimeout(() => textareaRef.current?.focus(), 100);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setText("");
+    clearImage();
+  };
+
+  const handleSend = async () => {
+    if (!text.trim() || sending) return;
+    if (!moderator) {
+      promptForModerator();
+    }
+    setSending(true);
     try {
-      let imageUrl = editEntry.imageUrl;
+      let imageUrl = imagePreview && !imageFile ? imagePreview : null;
       if (imageFile) imageUrl = await uploadImageToCloudinary(imageFile);
-      const res = await fetch(`${API_BASE}/api/entries/${editEntry.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, imageUrl }),
-      });
-      if (!res.ok) throw new Error();
-      const updated = await res.json();
-      setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
-      setEditEntry(null);
-      showToast("এন্ট্রি আপডেট হয়েছে");
+
+      if (editingId) {
+        const res = await fetch(`${API_BASE}/api/entries/${editingId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rawText: text, imageUrl, moderator }),
+        });
+        if (!res.ok) throw new Error();
+        const updated = await res.json();
+        setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+        showToast("এন্ট্রি আপডেট হয়েছে");
+      } else {
+        const res = await fetch(`${API_BASE}/api/entries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rawText: text, imageUrl, moderator }),
+        });
+        if (!res.ok) throw new Error();
+        const created = await res.json();
+        setEntries((prev) => [created, ...prev]);
+        showToast("নতুন এন্ট্রি যোগ হয়েছে");
+      }
+      setText("");
+      clearImage();
+      setEditingId(null);
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
     } catch {
-      showToast("আপডেট করা যায়নি");
+      showToast("সেভ করা যায়নি");
     } finally {
-      setSaving(false);
+      setSending(false);
     }
   };
 
@@ -244,7 +205,7 @@ export default function AsbabDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-[#0f0d0a] text-[#f2ede4]" style={{ fontFamily: "'Inter', sans-serif" }}>
+    <div className="min-h-screen bg-[#0f0d0a] text-[#f2ede4] flex flex-col" style={{ fontFamily: "'Inter', sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap');
         .font-serif { font-family: 'Cormorant Garamond', serif; }
@@ -260,10 +221,11 @@ export default function AsbabDashboard() {
               </h1>
             </div>
             <button
-              onClick={loadEntries}
+              onClick={promptForModerator}
               className="w-9 h-9 rounded-full bg-[#2a2419] border border-[#3a3226] flex items-center justify-center text-xs font-medium text-[#d9b877]"
+              title="আপনার নাম সেট করুন"
             >
-              ↻
+              {moderator ? moderator.slice(0, 2).toUpperCase() : "?"}
             </button>
           </div>
           <div className="mt-4 flex items-center gap-2 bg-[#17140f] border border-[#241f17] rounded-lg px-3 py-2">
@@ -278,7 +240,7 @@ export default function AsbabDashboard() {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-5 py-5 space-y-5 pb-28">
+      <main className="flex-1 max-w-lg mx-auto w-full px-5 py-5 space-y-5 pb-4">
         {loading && (
           <div className="flex items-center justify-center py-16 text-[#5c5342] gap-2">
             <Loader2 size={18} className="animate-spin" /> লোড হচ্ছে...
@@ -289,7 +251,7 @@ export default function AsbabDashboard() {
 
         {!loading && !error && filtered.length === 0 && (
           <div className="text-center py-16 text-[#5c5342] text-sm">
-            কোনো এন্ট্রি নেই। নিচের + বাটনে ক্লিক করে প্রথম এন্ট্রি যোগ করুন।
+            কোনো এন্ট্রি নেই। নিচে ছবি ও মেসেজ দিয়ে প্রথম এন্ট্রি পাঠান।
           </div>
         )}
 
@@ -317,7 +279,7 @@ export default function AsbabDashboard() {
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[11px] text-[#6b6152]">{entry.moderator}</span>
                 <div className="flex items-center gap-3">
-                  <button onClick={() => setEditEntry(entry)} className="text-[#6b6152] hover:text-[#d9b877]">
+                  <button onClick={() => startEdit(entry)} className="text-[#6b6152] hover:text-[#d9b877]">
                     <Pencil size={14} />
                   </button>
                   <button onClick={() => handleDelete(entry.id)} className="text-[#6b6152] hover:text-red-400">
@@ -362,27 +324,59 @@ export default function AsbabDashboard() {
         ))}
       </main>
 
-      <button
-        onClick={() => setShowNew(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#b8935a] hover:bg-[#c9a56d] flex items-center justify-center shadow-lg shadow-black/40 transition-colors"
-      >
-        <ImagePlus size={22} className="text-[#0f0d0a]" strokeWidth={2.5} />
-      </button>
-
-      {showNew && (
-        <Modal title="নতুন এন্ট্রি" onClose={() => setShowNew(false)}>
-          <EntryForm onCancel={() => setShowNew(false)} onSave={handleCreate} saving={saving} />
-        </Modal>
-      )}
-
-      {editEntry && (
-        <Modal title={`এডিট #${editEntry.id}`} onClose={() => setEditEntry(null)}>
-          <EntryForm initial={editEntry} onCancel={() => setEditEntry(null)} onSave={handleEditSave} saving={saving} />
-        </Modal>
-      )}
+      {/* Telegram-style compose bar, fixed at the bottom */}
+      <div className="sticky bottom-0 bg-[#0f0d0a]/95 backdrop-blur border-t border-[#241f17]">
+        <div className="max-w-lg mx-auto px-3 py-3">
+          {editingId && (
+            <div className="flex items-center justify-between text-[11px] text-[#b8935a] mb-1.5 px-1">
+              <span>এডিট করছেন #{editingId}</span>
+              <button onClick={cancelEdit} className="underline">বাতিল</button>
+            </div>
+          )}
+          {imagePreview && (
+            <div className="relative inline-block mb-2">
+              <img src={imagePreview} alt="" className="h-16 w-16 object-cover rounded-lg border border-[#3a3226]" />
+              <button
+                onClick={clearImage}
+                className="absolute -top-1.5 -right-1.5 bg-black rounded-full p-0.5 border border-[#3a3226]"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <label className="shrink-0 w-10 h-10 rounded-full bg-[#241f17] border border-[#3a3226] flex items-center justify-center cursor-pointer text-[#8a7a5c] hover:text-[#d9b877]">
+              <Paperclip size={17} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFile}
+                className="hidden"
+              />
+            </label>
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={autosize}
+              rows={1}
+              placeholder="মেসেজ লিখুন বা পেস্ট করুন..."
+              className="flex-1 resize-none bg-[#17140f] border border-[#3a3226] rounded-2xl px-4 py-2.5 text-sm text-[#f2ede4] placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a] max-h-40"
+              style={{ minHeight: "42px" }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!text.trim() || sending}
+              className="shrink-0 w-10 h-10 rounded-full bg-[#b8935a] hover:bg-[#c9a56d] disabled:opacity-40 flex items-center justify-center text-[#0f0d0a] transition-colors"
+            >
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {toast && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#1c1913] border border-[#3a3226] rounded-full px-4 py-2.5 flex items-center gap-2 text-sm shadow-lg">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#1c1913] border border-[#3a3226] rounded-full px-4 py-2.5 flex items-center gap-2 text-sm shadow-lg z-40">
           <CheckCircle2 size={15} className="text-emerald-400" />
           {toast}
         </div>
