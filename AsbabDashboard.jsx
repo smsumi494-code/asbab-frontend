@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Send, CheckCircle2, Package, Clock, Search, ImagePlus, Truck, X, Trash2, Pencil, Loader2 } from "lucide-react";
+import { Send, CheckCircle2, Package, Clock, Search, ImagePlus, X, Trash2, Pencil, Loader2 } from "lucide-react";
 
 // ---- CONFIG -----------------------------------------------------------
-// 1. After you deploy the backend on Railway, it gives you a URL like
-//    https://asbab-backend-production.up.railway.app — paste it below.
 const API_BASE = "https://asbab-backend-production.up.railway.app";
 
-// 2. Your Cloudinary details (Cloud Name is public/safe to keep here;
-//    NEVER put API Secret in frontend code).
+// Cloudinary details (Cloud Name is public/safe to keep here;
+// NEVER put API Secret in frontend code).
 const CLOUDINARY_CLOUD_NAME = "esxxmwyz";
 const CLOUDINARY_UPLOAD_PRESET = "ml_default";
 // ------------------------------------------------------------------------
@@ -43,25 +41,14 @@ function StatusPill({ status }) {
   );
 }
 
-// Shared form fields used by both "new entry" and "edit entry"
+// Simple form: an image + the raw message, exactly as the moderator would
+// type or paste it in Telegram. Nothing else. Claude reads this message in
+// the background (on the backend) only when "Send to Courier" is pressed.
 function EntryForm({ initial, onCancel, onSave, saving }) {
-  const [form, setForm] = useState(
-    initial || {
-      productCode: "",
-      hata: "",
-      long: "",
-      tag: "ফুল সেট",
-      customerName: "",
-      customerPhone: "",
-      customerAddress: "",
-      amount: "",
-      moderator: "",
-    }
-  );
+  const [rawText, setRawText] = useState(initial?.rawText || "");
+  const [moderator, setModerator] = useState(initial?.moderator || "");
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(initial?.imageUrl || null);
-
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const handleFile = (e) => {
     const file = e.target.files[0];
@@ -70,24 +57,11 @@ function EntryForm({ initial, onCancel, onSave, saving }) {
     setImagePreview(URL.createObjectURL(file));
   };
 
-  const field = (label, key, placeholder, type = "text") => (
-    <div>
-      <label className="text-[11px] text-[#8a7a5c] mb-1 block">{label}</label>
-      <input
-        type={type}
-        value={form[key] || ""}
-        onChange={set(key)}
-        placeholder={placeholder}
-        className="w-full bg-[#0f0d0a] border border-[#3a3226] rounded-lg px-3 py-2.5 text-sm text-[#f2ede4] placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a] focus:border-[#b8935a]"
-      />
-    </div>
-  );
-
   return (
     <div className="space-y-3">
       <div>
         <label className="text-[11px] text-[#8a7a5c] mb-1 block">প্রোডাক্ট ছবি</label>
-        <label className="flex items-center justify-center h-40 rounded-lg border border-dashed border-[#3a3226] bg-[#0f0d0a] cursor-pointer overflow-hidden">
+        <label className="flex items-center justify-center h-48 rounded-lg border border-dashed border-[#3a3226] bg-[#0f0d0a] cursor-pointer overflow-hidden">
           {imagePreview ? (
             <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
           ) : (
@@ -100,39 +74,28 @@ function EntryForm({ initial, onCancel, onSave, saving }) {
         </label>
       </div>
 
-      {field("প্রোডাক্ট কোড", "productCode", "7419")}
-      <div className="grid grid-cols-2 gap-3">
-        {field("Hata", "hata", "26")}
-        {field("Long", "long", "52")}
-      </div>
       <div>
-        <label className="text-[11px] text-[#8a7a5c] mb-1 block">ট্যাগ</label>
-        <select
-          value={form.tag}
-          onChange={set("tag")}
-          className="w-full bg-[#0f0d0a] border border-[#3a3226] rounded-lg px-3 py-2.5 text-sm text-[#f2ede4] focus:outline-none focus:ring-1 focus:ring-[#b8935a]"
-        >
-          <option>ফুল সেট</option>
-          <option>রেগুলার</option>
-        </select>
-      </div>
-
-      <div className="h-px bg-[#241f17] my-1" />
-
-      {field("কাস্টমার নাম", "customerName", "রায়হান")}
-      {field("ফোন নাম্বার", "customerPhone", "01886600494")}
-      <div>
-        <label className="text-[11px] text-[#8a7a5c] mb-1 block">ঠিকানা</label>
+        <label className="text-[11px] text-[#8a7a5c] mb-1 block">
+          মেসেজ লিখুন / পেস্ট করুন
+        </label>
         <textarea
-          value={form.customerAddress || ""}
-          onChange={set("customerAddress")}
-          rows={2}
-          placeholder="লাকসাম, কুমিল্লা"
+          value={rawText}
+          onChange={(e) => setRawText(e.target.value)}
+          rows={8}
+          placeholder={"7419\nHata:-26\nLong=52\nফুল সেট\n\nরায়হান\nলাকসাম কুমিল্লা\n01886600494\nবিল ২১০০ টাকা"}
           className="w-full bg-[#0f0d0a] border border-[#3a3226] rounded-lg px-3 py-2.5 text-sm text-[#f2ede4] placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a] resize-none"
         />
       </div>
-      {field("বিল (৳)", "amount", "2100", "number")}
-      {field("মডারেটর", "moderator", "Ayesha")}
+
+      <div>
+        <label className="text-[11px] text-[#8a7a5c] mb-1 block">মডারেটর</label>
+        <input
+          value={moderator}
+          onChange={(e) => setModerator(e.target.value)}
+          placeholder="Ayesha"
+          className="w-full bg-[#0f0d0a] border border-[#3a3226] rounded-lg px-3 py-2.5 text-sm text-[#f2ede4] placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a]"
+        />
+      </div>
 
       <div className="flex gap-2 pt-2">
         <button
@@ -142,8 +105,8 @@ function EntryForm({ initial, onCancel, onSave, saving }) {
           বাতিল
         </button>
         <button
-          onClick={() => onSave(form, imageFile)}
-          disabled={saving}
+          onClick={() => onSave({ rawText, moderator }, imageFile)}
+          disabled={saving || !rawText.trim()}
           className="flex-1 flex items-center justify-center gap-2 bg-[#b8935a] hover:bg-[#c9a56d] disabled:opacity-60 text-[#0f0d0a] font-medium text-sm py-3 rounded-xl transition-colors"
         >
           {saving ? <Loader2 size={16} className="animate-spin" /> : null}
@@ -183,7 +146,7 @@ export default function AsbabDashboard() {
 
   const showToast = (msg) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 2500);
+    setTimeout(() => setToast(null), 3000);
   };
 
   const loadEntries = async () => {
@@ -268,16 +231,16 @@ export default function AsbabDashboard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       setEntries((prev) => prev.map((e) => (e.id === entry.id ? data : e)));
-      showToast(`#${entry.productCode || entry.id} কুরিয়ারে পাঠানো হয়েছে`);
+      showToast(`#${data.productCode || entry.id} কুরিয়ারে পাঠানো হয়েছে`);
     } catch (err) {
-      showToast(err.message === "Failed" ? "কুরিয়ারে পাঠানো যায়নি" : err.message);
+      showToast(err.message || "কুরিয়ারে পাঠানো যায়নি");
     } finally {
       setSendingId(null);
     }
   };
 
   const filtered = entries.filter((e) =>
-    (e.productCode || "").toLowerCase().includes(search.toLowerCase())
+    (e.rawText || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -308,7 +271,7 @@ export default function AsbabDashboard() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="প্রোডাক্ট কোড খুঁজুন..."
+              placeholder="মেসেজে খুঁজুন..."
               className="bg-transparent text-sm placeholder-[#5c5342] focus:outline-none flex-1"
             />
           </div>
@@ -322,9 +285,7 @@ export default function AsbabDashboard() {
           </div>
         )}
 
-        {error && (
-          <div className="text-center py-10 text-[#d9877e] text-sm">{error}</div>
-        )}
+        {error && <div className="text-center py-10 text-[#d9877e] text-sm">{error}</div>}
 
         {!loading && !error && filtered.length === 0 && (
           <div className="text-center py-16 text-[#5c5342] text-sm">
@@ -336,7 +297,7 @@ export default function AsbabDashboard() {
           <article key={entry.id} className="rounded-2xl overflow-hidden border border-[#241f17] bg-[#161310]">
             <div className="relative">
               {entry.imageUrl ? (
-                <img src={entry.imageUrl} alt={entry.productCode} className="w-full h-72 object-cover" />
+                <img src={entry.imageUrl} alt="" className="w-full h-72 object-cover" />
               ) : (
                 <div className="w-full h-40 flex items-center justify-center bg-[#17140f] text-[#3a3226]">
                   <ImagePlus size={28} />
@@ -354,9 +315,7 @@ export default function AsbabDashboard() {
 
             <div className="px-4 pt-4 pb-4">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#241f17] text-[#d9b877] border border-[#3a3226]">
-                  {entry.tag}
-                </span>
+                <span className="text-[11px] text-[#6b6152]">{entry.moderator}</span>
                 <div className="flex items-center gap-3">
                   <button onClick={() => setEditEntry(entry)} className="text-[#6b6152] hover:text-[#d9b877]">
                     <Pencil size={14} />
@@ -367,26 +326,17 @@ export default function AsbabDashboard() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-sm mb-3">
-                <div className="border-l-2 border-[#3a3226] pl-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-[#6b6152]">Hata</p>
-                  <p className="text-[#f2ede4] font-medium mt-0.5">{entry.hata || "—"}</p>
-                </div>
-                <div className="border-l-2 border-[#3a3226] pl-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-[#6b6152]">Long</p>
-                  <p className="text-[#f2ede4] font-medium mt-0.5">{entry.long || "—"}</p>
-                </div>
-              </div>
+              <pre className="whitespace-pre-wrap font-sans text-sm text-[#c9bfa8] mb-4 leading-relaxed">
+                {entry.rawText}
+              </pre>
 
-              <div className="text-sm text-[#c9bfa8] mb-1">{entry.customerName}</div>
-              <div className="text-xs text-[#6b6152] mb-3">{entry.customerAddress}</div>
-
-              <div className="flex items-center justify-between text-[11px] text-[#6b6152] mb-4">
-                <span>{entry.moderator}</span>
-                {entry.status === "sent" && (
-                  <span className="text-[#8a7a5c]">{entry.consignmentId}</span>
-                )}
-              </div>
+              {entry.status === "sent" && (
+                <div className="text-[11px] text-[#8a7a5c] mb-3 space-y-0.5">
+                  <div>{entry.customerName} · {entry.customerPhone}</div>
+                  <div>{entry.customerAddress}</div>
+                  <div>Consignment: {entry.consignmentId}</div>
+                </div>
+              )}
 
               {entry.status === "pending" ? (
                 <button
@@ -399,7 +349,7 @@ export default function AsbabDashboard() {
                   ) : (
                     <Send size={15} strokeWidth={2.5} />
                   )}
-                  Send to Courier
+                  {sendingId === entry.id ? "AI পড়ছে..." : "Send to Courier"}
                 </button>
               ) : (
                 <button className="w-full flex items-center justify-center gap-2 bg-[#1c1913] border border-[#3a3226] text-[#8a7a5c] font-medium text-sm py-3 rounded-xl cursor-default">
@@ -426,7 +376,7 @@ export default function AsbabDashboard() {
       )}
 
       {editEntry && (
-        <Modal title={`এডিট #${editEntry.productCode || editEntry.id}`} onClose={() => setEditEntry(null)}>
+        <Modal title={`এডিট #${editEntry.id}`} onClose={() => setEditEntry(null)}>
           <EntryForm initial={editEntry} onCancel={() => setEditEntry(null)} onSave={handleEditSave} saving={saving} />
         </Modal>
       )}
