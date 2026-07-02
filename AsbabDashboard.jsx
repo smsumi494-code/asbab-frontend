@@ -40,12 +40,12 @@ function formatTime(iso) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-function StatusPill({ status }) {
+function StatusPill({ status, isMaking }) {
   if (status === "sent") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-900/30 border border-emerald-700/40 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
         <CheckCircle2 size={12} strokeWidth={2.5} />
-        কুরিয়ারে পাঠানো হয়েছে
+        {isMaking ? "মেকিং সম্পন্ন" : "কুরিয়ারে পাঠানো হয়েছে"}
       </span>
     );
   }
@@ -233,6 +233,21 @@ function GroupScreen({ groupId, entries, onBack, refreshEntries, moderator, prom
     }
   };
 
+  const handleMarkMakingDone = async (entry) => {
+    setSendingId(entry.id);
+    try {
+      const res = await fetch(`${API_BASE}/api/entries/${entry.id}/mark-done`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error();
+      await refreshEntries();
+    } catch {
+      showToast("আপডেট করা যায়নি");
+    } finally {
+      setSendingId(null);
+    }
+  };
+
   const groupEntries = entries.filter((e) => e.group === groupId);
   const filtered = groupEntries.filter((e) =>
     (e.rawText || "").toLowerCase().includes(search.toLowerCase())
@@ -294,7 +309,7 @@ function GroupScreen({ groupId, entries, onBack, refreshEntries, moderator, prom
                 </span>
               </div>
               <div className="absolute top-3 right-3">
-                <StatusPill status={entry.status} />
+                <StatusPill status={entry.status} isMaking={groupId === "making"} />
               </div>
             </div>
 
@@ -323,7 +338,27 @@ function GroupScreen({ groupId, entries, onBack, refreshEntries, moderator, prom
                 </div>
               )}
 
-              {entry.status === "pending" ? (
+              {groupId === "making" ? (
+                entry.status === "sent" ? (
+                  <button className="w-full flex items-center justify-center gap-2 bg-emerald-800/80 border border-emerald-600/50 text-emerald-100 font-medium text-sm py-3 rounded-xl cursor-default">
+                    <CheckCircle2 size={15} strokeWidth={2.5} />
+                    সেন্ড সাকসেসফুল
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleMarkMakingDone(entry)}
+                    disabled={sendingId === entry.id}
+                    className="w-full flex items-center justify-center gap-2 bg-[#b8935a] hover:bg-[#c9a56d] disabled:opacity-60 text-[#0f0d0a] font-medium text-sm py-3 rounded-xl transition-colors"
+                  >
+                    {sendingId === entry.id ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <Send size={15} strokeWidth={2.5} />
+                    )}
+                    Send Making
+                  </button>
+                )
+              ) : entry.status === "pending" ? (
                 <button
                   onClick={() => handleSendToCourier(entry)}
                   disabled={sendingId === entry.id}
