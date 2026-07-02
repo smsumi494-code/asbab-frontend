@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Send, CheckCircle2, Package, Clock, Search, ImagePlus, X, Trash2, Pencil, Loader2, Paperclip } from "lucide-react";
+import { Send, CheckCircle2, Package, Clock, Search, ImagePlus, X, Trash2, Pencil, Loader2, Paperclip, ChevronLeft } from "lucide-react";
 
 // ---- CONFIG -----------------------------------------------------------
 const API_BASE = "https://asbab-backend-production.up.railway.app";
 
-// Cloudinary details (Cloud Name is public/safe to keep here;
-// NEVER put API Secret in frontend code).
 const CLOUDINARY_CLOUD_NAME = "esxxmwyz";
 const CLOUDINARY_UPLOAD_PRESET = "ml_default";
+
+// The three "groups" — shown on the home screen like Telegram chats.
+// What each one actually does/means is still to be decided; this just
+// wires up the navigation + separate feeds.
+const GROUPS = [
+  { id: "pending", title: "Pending Group Of Asbab", initials: "PG", color: "#b8935a" },
+  { id: "all_order", title: "All Order Group Of Asbab", initials: "AO", color: "#7a9db8" },
+  { id: "making", title: "Making Of Asbab", initials: "MK", color: "#8ab87a" },
+];
 // ------------------------------------------------------------------------
 
 async function uploadImageToCloudinary(file) {
@@ -22,6 +29,15 @@ async function uploadImageToCloudinary(file) {
   if (!res.ok) throw new Error("Image upload failed");
   const data = await res.json();
   return data.secure_url;
+}
+
+function formatTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 function StatusPill({ status }) {
@@ -41,21 +57,70 @@ function StatusPill({ status }) {
   );
 }
 
-export default function AsbabDashboard() {
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+// ---- HOME SCREEN: list of the 3 groups, Telegram-chat-list style --------
+function HomeScreen({ entries, onOpenGroup }) {
+  const rows = GROUPS.map((g) => {
+    const groupEntries = entries.filter((e) => e.group === g.id);
+    const last = groupEntries[0]; // entries are newest-first
+    return { ...g, count: groupEntries.length, last };
+  });
+
+  return (
+    <div className="min-h-screen bg-[#0f0d0a] text-[#f2ede4]" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap');
+        .font-serif { font-family: 'Cormorant Garamond', serif; }
+      `}</style>
+      <header className="px-5 pt-6 pb-4 border-b border-[#241f17]">
+        <p className="text-[10px] uppercase tracking-[0.25em] text-[#8a7a5c]">Moderator Panel</p>
+        <h1 className="font-serif text-[28px] leading-none mt-1">
+          Asbab <span className="text-[#b8935a] italic">Abaya</span>
+        </h1>
+      </header>
+
+      <div className="divide-y divide-[#1c1913]">
+        {rows.map((g) => (
+          <button
+            key={g.id}
+            onClick={() => onOpenGroup(g.id)}
+            className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-[#161310]"
+          >
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-semibold text-[#0f0d0a] shrink-0"
+              style={{ backgroundColor: g.color }}
+            >
+              {g.initials}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-[15px] text-[#f2ede4] truncate">{g.title}</span>
+                <span className="text-[11px] text-[#6b6152] shrink-0 ml-2">
+                  {g.last ? formatTime(g.last.createdAt) : ""}
+                </span>
+              </div>
+              <p className="text-[13px] text-[#6b6152] truncate mt-0.5">
+                {g.last ? (g.last.rawText || "").split("\n")[0] : "কোনো এন্ট্রি নেই"}
+              </p>
+            </div>
+            {g.count > 0 && (
+              <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-[#b8935a] text-[#0f0d0a] text-[11px] font-semibold flex items-center justify-center">
+                {g.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---- GROUP SCREEN: the feed + Telegram-style compose bar for one group --
+function GroupScreen({ groupId, entries, onBack, refreshEntries, moderator, promptForModerator }) {
+  const group = GROUPS.find((g) => g.id === groupId);
   const [sendingId, setSendingId] = useState(null);
   const [toast, setToast] = useState(null);
   const [search, setSearch] = useState("");
 
-  // Moderator identity — set once, remembered on this device, attached
-  // silently to every entry (no field to fill each time).
-  const [moderator, setModerator] = useState(
-    () => localStorage.getItem("asbab_moderator") || ""
-  );
-
-  // Telegram-style compose bar state
   const [text, setText] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -67,32 +132,6 @@ export default function AsbabDashboard() {
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
-  };
-
-  const loadEntries = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/entries`);
-      if (!res.ok) throw new Error("Failed to load");
-      setEntries(await res.json());
-    } catch (err) {
-      setError("এন্ট্রি লোড করা যায়নি। Backend URL ঠিক আছে কিনা দেখুন।");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadEntries();
-  }, []);
-
-  const promptForModerator = () => {
-    const name = window.prompt("আপনার নাম লিখুন (একবারই লাগবে):", moderator);
-    if (name && name.trim()) {
-      setModerator(name.trim());
-      localStorage.setItem("asbab_moderator", name.trim());
-    }
   };
 
   const handleFile = (e) => {
@@ -120,7 +159,6 @@ export default function AsbabDashboard() {
     setText(entry.rawText || "");
     setImagePreview(entry.imageUrl || null);
     setImageFile(null);
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
     setTimeout(() => textareaRef.current?.focus(), 100);
   };
 
@@ -132,9 +170,7 @@ export default function AsbabDashboard() {
 
   const handleSend = async () => {
     if (!text.trim() || sending) return;
-    if (!moderator) {
-      promptForModerator();
-    }
+    if (!moderator) promptForModerator();
     setSending(true);
     try {
       let imageUrl = imagePreview && !imageFile ? imagePreview : null;
@@ -147,20 +183,17 @@ export default function AsbabDashboard() {
           body: JSON.stringify({ rawText: text, imageUrl, moderator }),
         });
         if (!res.ok) throw new Error();
-        const updated = await res.json();
-        setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
         showToast("এন্ট্রি আপডেট হয়েছে");
       } else {
         const res = await fetch(`${API_BASE}/api/entries`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rawText: text, imageUrl, moderator }),
+          body: JSON.stringify({ rawText: text, imageUrl, moderator, group: groupId }),
         });
         if (!res.ok) throw new Error();
-        const created = await res.json();
-        setEntries((prev) => [created, ...prev]);
         showToast("নতুন এন্ট্রি যোগ হয়েছে");
       }
+      await refreshEntries();
       setText("");
       clearImage();
       setEditingId(null);
@@ -176,7 +209,7 @@ export default function AsbabDashboard() {
     try {
       const res = await fetch(`${API_BASE}/api/entries/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
-      setEntries((prev) => prev.filter((e) => e.id !== id));
+      await refreshEntries();
       showToast("এন্ট্রি ডিলিট হয়েছে (শুধু অ্যাপ থেকে)");
     } catch {
       showToast("ডিলিট করা যায়নি");
@@ -191,7 +224,7 @@ export default function AsbabDashboard() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      setEntries((prev) => prev.map((e) => (e.id === entry.id ? data : e)));
+      await refreshEntries();
       showToast(`#${data.productCode || entry.id} কুরিয়ারে পাঠানো হয়েছে`);
     } catch (err) {
       showToast(err.message || "কুরিয়ারে পাঠানো যায়নি");
@@ -200,7 +233,8 @@ export default function AsbabDashboard() {
     }
   };
 
-  const filtered = entries.filter((e) =>
+  const groupEntries = entries.filter((e) => e.group === groupId);
+  const filtered = groupEntries.filter((e) =>
     (e.rawText || "").toLowerCase().includes(search.toLowerCase())
   );
 
@@ -212,23 +246,20 @@ export default function AsbabDashboard() {
       `}</style>
 
       <header className="sticky top-0 z-30 bg-[#0f0d0a]/95 backdrop-blur border-b border-[#241f17]">
-        <div className="max-w-lg mx-auto px-5 pt-5 pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.25em] text-[#8a7a5c]">Moderator Panel</p>
-              <h1 className="font-serif text-[26px] leading-none mt-1 text-[#f2ede4]">
-                Asbab <span className="text-[#b8935a] italic">Abaya</span>
-              </h1>
-            </div>
-            <button
-              onClick={promptForModerator}
-              className="w-9 h-9 rounded-full bg-[#2a2419] border border-[#3a3226] flex items-center justify-center text-xs font-medium text-[#d9b877]"
-              title="আপনার নাম সেট করুন"
-            >
-              {moderator ? moderator.slice(0, 2).toUpperCase() : "?"}
-            </button>
+        <div className="max-w-lg mx-auto px-3 pt-4 pb-3 flex items-center gap-2">
+          <button onClick={onBack} className="text-[#8a7a5c] hover:text-[#f2ede4] p-1">
+            <ChevronLeft size={22} />
+          </button>
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold text-[#0f0d0a] shrink-0"
+            style={{ backgroundColor: group.color }}
+          >
+            {group.initials}
           </div>
-          <div className="mt-4 flex items-center gap-2 bg-[#17140f] border border-[#241f17] rounded-lg px-3 py-2">
+          <h1 className="font-medium text-[15px] flex-1 truncate">{group.title}</h1>
+        </div>
+        <div className="max-w-lg mx-auto px-3 pb-3">
+          <div className="flex items-center gap-2 bg-[#17140f] border border-[#241f17] rounded-lg px-3 py-2">
             <Search size={14} className="text-[#5c5342]" />
             <input
               value={search}
@@ -240,16 +271,8 @@ export default function AsbabDashboard() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-lg mx-auto w-full px-5 py-5 space-y-5 pb-4">
-        {loading && (
-          <div className="flex items-center justify-center py-16 text-[#5c5342] gap-2">
-            <Loader2 size={18} className="animate-spin" /> লোড হচ্ছে...
-          </div>
-        )}
-
-        {error && <div className="text-center py-10 text-[#d9877e] text-sm">{error}</div>}
-
-        {!loading && !error && filtered.length === 0 && (
+      <main className="flex-1 max-w-lg mx-auto w-full px-5 py-5 space-y-5">
+        {filtered.length === 0 && (
           <div className="text-center py-16 text-[#5c5342] text-sm">
             কোনো এন্ট্রি নেই। নিচে ছবি ও মেসেজ দিয়ে প্রথম এন্ট্রি পাঠান।
           </div>
@@ -324,7 +347,6 @@ export default function AsbabDashboard() {
         ))}
       </main>
 
-      {/* Telegram-style compose bar, fixed at the bottom */}
       <div className="sticky bottom-0 bg-[#0f0d0a]/95 backdrop-blur border-t border-[#241f17]">
         <div className="max-w-lg mx-auto px-3 py-3">
           {editingId && (
@@ -347,13 +369,7 @@ export default function AsbabDashboard() {
           <div className="flex items-end gap-2">
             <label className="shrink-0 w-10 h-10 rounded-full bg-[#241f17] border border-[#3a3226] flex items-center justify-center cursor-pointer text-[#8a7a5c] hover:text-[#d9b877]">
               <Paperclip size={17} />
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFile}
-                className="hidden"
-              />
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
             </label>
             <textarea
               ref={textareaRef}
@@ -382,5 +398,72 @@ export default function AsbabDashboard() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AsbabDashboard() {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [view, setView] = useState("home"); // "home" | groupId
+  const [moderator, setModerator] = useState(
+    () => localStorage.getItem("asbab_moderator") || ""
+  );
+
+  const promptForModerator = () => {
+    const name = window.prompt("আপনার নাম লিখুন (একবারই লাগবে):", moderator);
+    if (name && name.trim()) {
+      setModerator(name.trim());
+      localStorage.setItem("asbab_moderator", name.trim());
+    }
+  };
+
+  const loadEntries = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/entries`);
+      if (!res.ok) throw new Error("Failed to load");
+      setEntries(await res.json());
+    } catch (err) {
+      setError("এন্ট্রি লোড করা যায়নি। Backend URL ঠিক আছে কিনা দেখুন।");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadEntries();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0f0d0a] flex items-center justify-center text-[#5c5342] gap-2">
+        <Loader2 size={18} className="animate-spin" /> লোড হচ্ছে...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#0f0d0a] flex items-center justify-center text-[#d9877e] text-sm px-6 text-center">
+        {error}
+      </div>
+    );
+  }
+
+  if (view === "home") {
+    return <HomeScreen entries={entries} onOpenGroup={(id) => setView(id)} />;
+  }
+
+  return (
+    <GroupScreen
+      groupId={view}
+      entries={entries}
+      onBack={() => setView("home")}
+      refreshEntries={loadEntries}
+      moderator={moderator}
+      promptForModerator={promptForModerator}
+    />
   );
 }
