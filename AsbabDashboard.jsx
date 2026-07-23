@@ -1129,7 +1129,9 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
                   <div className="space-y-1.5">
                     {pages.map((p) => (
                       <div key={p.id} className="flex items-center justify-between bg-[#161310] border border-[#241f17] rounded-lg px-3 py-2">
-                        <span className="text-[13px]">{p.name}</span>
+                        <span className="text-[13px]">
+                          {p.name} <span className="text-[11px] text-[#6b6152]">(ID: {p.id})</span>
+                        </span>
                         <div className="flex items-center gap-3">
                           <button onClick={() => startEditPage(p)} className="text-[#6b6152] hover:text-[#d9b877]">
                             <Pencil size={13} />
