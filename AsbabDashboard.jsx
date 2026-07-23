@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Send, CheckCircle2, Package, Clock, Search, ImagePlus, X, Trash2, Pencil,
-  Loader2, Paperclip, ChevronLeft, Menu, LogOut, UserPlus, Key, Shield, Lock, BarChart3,
+  Loader2, Paperclip, ChevronLeft, Menu, LogOut, UserPlus, Key, Shield, Lock, BarChart3, AlertTriangle,
 } from "lucide-react";
 
 // ---- CONFIG -----------------------------------------------------------
@@ -1163,7 +1163,7 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
 }
 
 // ---- HOME SCREEN --------------------------------------------------------
-function HomeScreen({ entries, onOpenGroup, onOpenMenu, onOpenPurchaseCost, onOpenRecycleBin, onOpenAnalytics, recycleBinItems, isAdmin, allowedGroups }) {
+function HomeScreen({ entries, onOpenGroup, onOpenMenu, onOpenPurchaseCost, onOpenRecycleBin, onOpenAnalytics, onOpenSystemAlerts, recycleBinItems, isAdmin, allowedGroups }) {
   const rows = GROUPS.map((g) => {
     const groupEntries = entries.filter((e) => e.group === g.id);
     const last = groupEntries[0];
@@ -1239,6 +1239,21 @@ function HomeScreen({ entries, onOpenGroup, onOpenMenu, onOpenPurchaseCost, onOp
             </div>
             <div className="flex-1 min-w-0">
               <span className="font-medium text-[15px] text-[#f2ede4] truncate">Asbab Sales Summary</span>
+              <p className="text-[13px] text-[#6b6152] truncate mt-0.5">শুধু Admin দেখতে পারেন</p>
+            </div>
+          </button>
+        )}
+
+        {isAdmin && (
+          <button
+            onClick={onOpenSystemAlerts}
+            className="w-full flex items-center gap-3 px-5 py-4 text-left active:bg-[#161310]"
+          >
+            <div className="w-12 h-12 rounded-full flex items-center justify-center text-[#0f0d0a] shrink-0 bg-[#c99b5a]">
+              <AlertTriangle size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="font-medium text-[15px] text-[#f2ede4] truncate">System Alerts</span>
               <p className="text-[13px] text-[#6b6152] truncate mt-0.5">শুধু Admin দেখতে পারেন</p>
             </div>
           </button>
@@ -1411,6 +1426,105 @@ function printAnalyticsReport(data, rangeLabel) {
   win.document.close();
 }
 
+// ---- SYSTEM ALERTS (Admin only) -----------------------------------------
+function SystemAlertsScreen({ onBack, authedFetch }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await authedFetch(`${API_BASE}/api/system-alerts`);
+      if (res.ok) setData(await res.json());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const Row = ({ ok, title, detail }) => (
+    <div className={`rounded-xl border px-4 py-3 mb-2 ${ok ? "border-emerald-800/40 bg-emerald-900/10" : "border-red-800/40 bg-red-900/10"}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-[16px]">{ok ? "✅" : "⚠️"}</span>
+        <span className="text-[13px] font-medium text-[#f2ede4]">{title}</span>
+      </div>
+      <p className="text-[11px] text-[#8a7a5c]">{detail}</p>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#0f0d0a] text-[#f2ede4]" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <style>{globalStyle}</style>
+      <header className="sticky top-0 z-30 bg-[#0f0d0a]/95 backdrop-blur border-b border-[#241f17] px-3 pt-4 pb-3 flex items-center gap-2">
+        <button onClick={onBack} className="text-[#8a7a5c] hover:text-[#f2ede4] p-1">
+          <ChevronLeft size={22} />
+        </button>
+        <h1 className="font-medium text-[15px] flex-1 truncate">System Alerts</h1>
+        <button onClick={load} className="text-[11px] text-[#8a7a5c] underline">
+          রিফ্রেশ
+        </button>
+      </header>
+
+      <main className="max-w-lg mx-auto px-5 py-5">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-[#8a7a5c] text-sm">
+            <Loader2 size={16} className="animate-spin" /> লোড হচ্ছে...
+          </div>
+        ) : data ? (
+          <>
+            <Row
+              ok={data.smsFailures24h === 0}
+              title="অর্ডার কনফার্মেশন SMS"
+              detail={
+                data.smsFailures24h === 0
+                  ? "গত ২৪ ঘণ্টায় কোনো ব্যর্থতা নেই"
+                  : `গত ২৪ ঘণ্টায় ${data.smsFailures24h}টা SMS পাঠানো ব্যর্থ হয়েছে`
+              }
+            />
+            <Row
+              ok={data.aiFailures24h === 0}
+              title="AI (Making/Sales/Send to Courier)"
+              detail={
+                data.aiFailures24h === 0
+                  ? "গত ২৪ ঘণ্টায় কোনো সম্পূর্ণ ব্যর্থতা নেই"
+                  : `গত ২৪ ঘণ্টায় ${data.aiFailures24h}বার সব AI key একসাথে ব্যর্থ হয়েছে`
+              }
+            />
+            <Row
+              ok={data.stuckCourierOrders === 0}
+              title="কুরিয়ার স্ট্যাটাস আপডেট"
+              detail={
+                data.stuckCourierOrders === 0
+                  ? "সব পুরনো অর্ডারেই স্ট্যাটাস এসেছে"
+                  : `${data.stuckCourierOrders}টা অর্ডার ৩+ দিন আগে পাঠানো হয়েছে, এখনো কোনো ডেলিভারি স্ট্যাটাস আসেনি — Steadfast webhook ঠিকমতো কাজ করছে কিনা দেখুন`
+              }
+            />
+            {data.websiteGap ? (
+              <Row
+                ok={data.websiteGap.gap === 0}
+                title="ওয়েবসাইট অর্ডার গ্যাপ (আনুমানিক)"
+                detail={
+                  data.websiteGap.gap === 0
+                    ? `গত ৪৮ ঘণ্টায় WooCommerce-এ ${data.websiteGap.wcCount}টা, আমাদের কাছেও ${data.websiteGap.ourCount}টা — মিলছে`
+                    : `WooCommerce-এ ${data.websiteGap.wcCount}টা অর্ডার আছে, কিন্তু আমাদের কাছে মাত্র ${data.websiteGap.ourCount}টা — ${data.websiteGap.gap}টা সম্ভবত আসেনি`
+                }
+              />
+            ) : (
+              <Row ok={false} title="ওয়েবসাইট অর্ডার গ্যাপ" detail="চেক করা যায়নি (WooCommerce key সেটআপ নেই বা সংযোগ ব্যর্থ)" />
+            )}
+            <Row ok={true} title="ডাটাবেস অটো-ব্যাকআপ" detail="এটা এখান থেকে স্বয়ংক্রিয়ভাবে চেক করা যায় না — GitHub Actions ট্যাবে গিয়ে মাঝেমধ্যে ম্যানুয়ালি দেখে নিন" />
+          </>
+        ) : (
+          <p className="text-center py-8 text-red-400 text-sm">লোড করা যায়নি</p>
+        )}
+      </main>
+    </div>
+  );
+}
+
 function AnalyticsScreen({ onBack, authedFetch }) {
   const [mode, setMode] = useState("today");
   const [anchor, setAnchor] = useState(new Date());
@@ -1422,6 +1536,20 @@ function AnalyticsScreen({ onBack, authedFetch }) {
   const [recalcMsg, setRecalcMsg] = useState(null);
   const [drillDownPage, setDrillDownPage] = useState(null);
   const [showLocationReport, setShowLocationReport] = useState(false);
+  const [showOtpLog, setShowOtpLog] = useState(false);
+  const [otpLog, setOtpLog] = useState(null);
+  const [loadingOtpLog, setLoadingOtpLog] = useState(false);
+
+  const loadOtpLog = async () => {
+    setLoadingOtpLog(true);
+    try {
+      const res = await authedFetch(`${API_BASE}/api/entries/otp-log`);
+      if (res.ok) setOtpLog(await res.json());
+    } finally {
+      setLoadingOtpLog(false);
+    }
+  };
+
   const [locationData, setLocationData] = useState(null);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
@@ -1542,6 +1670,17 @@ function AnalyticsScreen({ onBack, authedFetch }) {
               PDF ডাউনলোড
             </button>
           )}
+        </div>
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={() => {
+              setShowOtpLog(true);
+              loadOtpLog();
+            }}
+            className="text-[11px] bg-[#241f17] border border-[#3a3226] text-[#e0ac6f] font-medium px-2.5 py-1.5 rounded-lg"
+          >
+            📩 OTP লগ
+          </button>
         </div>
         {recalcMsg && <p className="text-[11px] text-[#8a7a5c] mb-2">{recalcMsg}</p>}
         <div className="flex gap-2 mb-2">
@@ -1765,6 +1904,46 @@ function AnalyticsScreen({ onBack, authedFetch }) {
                 {locationData.locations.length === 0 && (
                   <p className="text-center py-4 text-[#5c5342] text-xs">কোনো ডেটা নেই</p>
                 )}
+              </div>
+            ) : (
+              <p className="text-center py-8 text-red-400 text-sm">লোড করা যায়নি</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showOtpLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-6">
+          <div className="w-full max-w-sm bg-[#1a1712] border border-[#3a3226] rounded-2xl p-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-serif text-lg text-[#f2ede4]">OTP ডেলিভারি লগ</h3>
+              <button onClick={() => setShowOtpLog(false)} className="text-[#8a7a5c] hover:text-[#f2ede4]">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-[11px] text-[#6b6152] mb-3">সাম্প্রতিক ১০০টা OTP পাঠানোর চেষ্টা</p>
+
+            {loadingOtpLog ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-[#8a7a5c] text-sm">
+                <Loader2 size={16} className="animate-spin" /> লোড হচ্ছে...
+              </div>
+            ) : otpLog ? (
+              <div className="space-y-1.5">
+                {otpLog.map((o, i) => (
+                  <div key={i} className="bg-[#161310] border border-[#241f17] rounded-lg px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[13px] text-[#c9bfa8]">{o.phone}</span>
+                      <span className={`text-[12px] font-medium ${o.sent ? "text-emerald-300" : "text-red-400"}`}>
+                        {o.sent ? "✅ পাঠানো হয়েছে" : "❌ ব্যর্থ"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#6b6152]">
+                      {formatFullDateTime(o.created_at)} {o.verified ? "· যাচাই হয়েছে" : ""}
+                    </p>
+                    {o.send_error && <p className="text-[10px] text-red-400 mt-0.5">{o.send_error}</p>}
+                  </div>
+                ))}
+                {otpLog.length === 0 && <p className="text-center py-4 text-[#5c5342] text-xs">কোনো ডেটা নেই</p>}
               </div>
             ) : (
               <p className="text-center py-8 text-red-400 text-sm">লোড করা যায়নি</p>
@@ -4275,6 +4454,7 @@ export default function AsbabDashboard() {
           onOpenPurchaseCost={() => navigate("purchase_cost")}
           onOpenRecycleBin={() => navigate("recycle_bin")}
           onOpenAnalytics={() => navigate("analytics")}
+          onOpenSystemAlerts={() => navigate("system_alerts")}
           recycleBinItems={recycleBinItems}
           isAdmin={auth.role === "admin"}
           allowedGroups={auth.allowedGroups}
@@ -4285,6 +4465,8 @@ export default function AsbabDashboard() {
         <RecycleBinScreen onBack={() => window.history.back()} authedFetch={authedFetch} />
       ) : view === "analytics" ? (
         <AnalyticsScreen onBack={() => window.history.back()} authedFetch={authedFetch} />
+      ) : view === "system_alerts" ? (
+        <SystemAlertsScreen onBack={() => window.history.back()} authedFetch={authedFetch} />
       ) : (
         <GroupScreen
           groupId={view}
