@@ -1476,6 +1476,32 @@ function printAnalyticsReport(data, rangeLabel) {
 function SystemAlertsScreen({ onBack, authedFetch }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showOtpLog, setShowOtpLog] = useState(false);
+  const [otpLog, setOtpLog] = useState(null);
+  const [loadingOtpLog, setLoadingOtpLog] = useState(false);
+  const [showFbLog, setShowFbLog] = useState(false);
+  const [fbLog, setFbLog] = useState(null);
+  const [loadingFbLog, setLoadingFbLog] = useState(false);
+
+  const loadOtpLog = async () => {
+    setLoadingOtpLog(true);
+    try {
+      const res = await authedFetch(`${API_BASE}/api/entries/otp-log`);
+      if (res.ok) setOtpLog(await res.json());
+    } finally {
+      setLoadingOtpLog(false);
+    }
+  };
+
+  const loadFbLog = async () => {
+    setLoadingFbLog(true);
+    try {
+      const res = await authedFetch(`${API_BASE}/api/entries/facebook-log`);
+      if (res.ok) setFbLog(await res.json());
+    } finally {
+      setLoadingFbLog(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -1513,6 +1539,27 @@ function SystemAlertsScreen({ onBack, authedFetch }) {
           রিফ্রেশ
         </button>
       </header>
+
+      <div className="max-w-lg mx-auto px-5 pt-4 flex gap-2">
+        <button
+          onClick={() => {
+            setShowOtpLog(true);
+            loadOtpLog();
+          }}
+          className="flex-1 text-[11px] bg-[#241f17] border border-[#3a3226] text-[#e0ac6f] font-medium px-2.5 py-1.5 rounded-lg"
+        >
+          📩 OTP লগ
+        </button>
+        <button
+          onClick={() => {
+            setShowFbLog(true);
+            loadFbLog();
+          }}
+          className="flex-1 text-[11px] bg-[#241f17] border border-[#3a3226] text-[#7a9db8] font-medium px-2.5 py-1.5 rounded-lg"
+        >
+          📘 Facebook লগ
+        </button>
+      </div>
 
       <main className="max-w-lg mx-auto px-5 py-5">
         {loading ? (
@@ -1567,6 +1614,86 @@ function SystemAlertsScreen({ onBack, authedFetch }) {
           <p className="text-center py-8 text-red-400 text-sm">লোড করা যায়নি</p>
         )}
       </main>
+
+      {showOtpLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-6">
+          <div className="w-full max-w-sm bg-[#1a1712] border border-[#3a3226] rounded-2xl p-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-serif text-lg text-[#f2ede4]">OTP ডেলিভারি লগ</h3>
+              <button onClick={() => setShowOtpLog(false)} className="text-[#8a7a5c] hover:text-[#f2ede4]">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-[11px] text-[#6b6152] mb-3">সাম্প্রতিক ১০০টা OTP পাঠানোর চেষ্টা</p>
+
+            {loadingOtpLog ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-[#8a7a5c] text-sm">
+                <Loader2 size={16} className="animate-spin" /> লোড হচ্ছে...
+              </div>
+            ) : otpLog ? (
+              <div className="space-y-1.5">
+                {otpLog.map((o, i) => (
+                  <div key={i} className="bg-[#161310] border border-[#241f17] rounded-lg px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[13px] text-[#c9bfa8]">{o.phone}</span>
+                      <span className={`text-[12px] font-medium ${o.sent ? "text-emerald-300" : "text-red-400"}`}>
+                        {o.sent ? "✅ পাঠানো হয়েছে" : "❌ ব্যর্থ"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#6b6152]">
+                      {formatFullDateTime(o.created_at)} {o.verified ? "· যাচাই হয়েছে" : ""}
+                    </p>
+                    {o.send_error && <p className="text-[10px] text-red-400 mt-0.5">{o.send_error}</p>}
+                  </div>
+                ))}
+                {otpLog.length === 0 && <p className="text-center py-4 text-[#5c5342] text-xs">কোনো ডেটা নেই</p>}
+              </div>
+            ) : (
+              <p className="text-center py-8 text-red-400 text-sm">লোড করা যায়নি</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showFbLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-6">
+          <div className="w-full max-w-sm bg-[#1a1712] border border-[#3a3226] rounded-2xl p-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-serif text-lg text-[#f2ede4]">Facebook ইভেন্ট লগ</h3>
+              <button onClick={() => setShowFbLog(false)} className="text-[#8a7a5c] hover:text-[#f2ede4]">
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-[11px] text-[#6b6152] mb-3">সাম্প্রতিক ১০০টা Complete/Refund ইভেন্ট পাঠানোর চেষ্টা</p>
+
+            {loadingFbLog ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-[#8a7a5c] text-sm">
+                <Loader2 size={16} className="animate-spin" /> লোড হচ্ছে...
+              </div>
+            ) : fbLog ? (
+              <div className="space-y-1.5">
+                {fbLog.map((f, i) => (
+                  <div key={i} className="bg-[#161310] border border-[#241f17] rounded-lg px-3 py-2">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-[13px] text-[#c9bfa8]">{f.phone}</span>
+                      <span className={`text-[12px] font-medium ${f.success ? "text-emerald-300" : "text-red-400"}`}>
+                        {f.success ? "✅ সফল" : "❌ ব্যর্থ"}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[#6b6152]">
+                      {f.event_name} · {formatFullDateTime(f.created_at)}
+                    </p>
+                    {f.error && <p className="text-[10px] text-red-400 mt-0.5">{f.error}</p>}
+                  </div>
+                ))}
+                {fbLog.length === 0 && <p className="text-center py-4 text-[#5c5342] text-xs">কোনো ডেটা নেই</p>}
+              </div>
+            ) : (
+              <p className="text-center py-8 text-red-400 text-sm">লোড করা যায়নি</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1582,20 +1709,6 @@ function AnalyticsScreen({ onBack, authedFetch }) {
   const [recalcMsg, setRecalcMsg] = useState(null);
   const [drillDownPage, setDrillDownPage] = useState(null);
   const [showLocationReport, setShowLocationReport] = useState(false);
-  const [showOtpLog, setShowOtpLog] = useState(false);
-  const [otpLog, setOtpLog] = useState(null);
-  const [loadingOtpLog, setLoadingOtpLog] = useState(false);
-
-  const loadOtpLog = async () => {
-    setLoadingOtpLog(true);
-    try {
-      const res = await authedFetch(`${API_BASE}/api/entries/otp-log`);
-      if (res.ok) setOtpLog(await res.json());
-    } finally {
-      setLoadingOtpLog(false);
-    }
-  };
-
   const [locationData, setLocationData] = useState(null);
   const [loadingLocations, setLoadingLocations] = useState(false);
   const [backfilling, setBackfilling] = useState(false);
@@ -1716,17 +1829,6 @@ function AnalyticsScreen({ onBack, authedFetch }) {
               PDF ডাউনলোড
             </button>
           )}
-        </div>
-        <div className="flex justify-end mb-2">
-          <button
-            onClick={() => {
-              setShowOtpLog(true);
-              loadOtpLog();
-            }}
-            className="text-[11px] bg-[#241f17] border border-[#3a3226] text-[#e0ac6f] font-medium px-2.5 py-1.5 rounded-lg"
-          >
-            📩 OTP লগ
-          </button>
         </div>
         {recalcMsg && <p className="text-[11px] text-[#8a7a5c] mb-2">{recalcMsg}</p>}
         <div className="flex gap-2 mb-2">
@@ -1950,46 +2052,6 @@ function AnalyticsScreen({ onBack, authedFetch }) {
                 {locationData.locations.length === 0 && (
                   <p className="text-center py-4 text-[#5c5342] text-xs">কোনো ডেটা নেই</p>
                 )}
-              </div>
-            ) : (
-              <p className="text-center py-8 text-red-400 text-sm">লোড করা যায়নি</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {showOtpLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-6">
-          <div className="w-full max-w-sm bg-[#1a1712] border border-[#3a3226] rounded-2xl p-6 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-1">
-              <h3 className="font-serif text-lg text-[#f2ede4]">OTP ডেলিভারি লগ</h3>
-              <button onClick={() => setShowOtpLog(false)} className="text-[#8a7a5c] hover:text-[#f2ede4]">
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-[11px] text-[#6b6152] mb-3">সাম্প্রতিক ১০০টা OTP পাঠানোর চেষ্টা</p>
-
-            {loadingOtpLog ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-[#8a7a5c] text-sm">
-                <Loader2 size={16} className="animate-spin" /> লোড হচ্ছে...
-              </div>
-            ) : otpLog ? (
-              <div className="space-y-1.5">
-                {otpLog.map((o, i) => (
-                  <div key={i} className="bg-[#161310] border border-[#241f17] rounded-lg px-3 py-2">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[13px] text-[#c9bfa8]">{o.phone}</span>
-                      <span className={`text-[12px] font-medium ${o.sent ? "text-emerald-300" : "text-red-400"}`}>
-                        {o.sent ? "✅ পাঠানো হয়েছে" : "❌ ব্যর্থ"}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-[#6b6152]">
-                      {formatFullDateTime(o.created_at)} {o.verified ? "· যাচাই হয়েছে" : ""}
-                    </p>
-                    {o.send_error && <p className="text-[10px] text-red-400 mt-0.5">{o.send_error}</p>}
-                  </div>
-                ))}
-                {otpLog.length === 0 && <p className="text-center py-4 text-[#5c5342] text-xs">কোনো ডেটা নেই</p>}
               </div>
             ) : (
               <p className="text-center py-8 text-red-400 text-sm">লোড করা যায়নি</p>
