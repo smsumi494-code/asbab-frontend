@@ -418,6 +418,7 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
   const [lateEnabled, setLateEnabled] = useState(true);
   const [lateCutoffHour, setLateCutoffHour] = useState(12);
   const [lateCutoffMinute, setLateCutoffMinute] = useState(30);
+  const [courierCheckInterval, setCourierCheckInterval] = useState(30);
   const [savingLateSettings, setSavingLateSettings] = useState(false);
 
   useEffect(() => {
@@ -425,6 +426,7 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
       setLateEnabled(appSettings.latePostPromptEnabled);
       setLateCutoffHour(appSettings.latePostPromptCutoffHour);
       setLateCutoffMinute(appSettings.latePostPromptCutoffMinute);
+      setCourierCheckInterval(appSettings.courierCheckIntervalMinutes || 30);
     }
   }, [appSettings]);
 
@@ -438,6 +440,7 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
           latePostPromptEnabled: lateEnabled,
           latePostPromptCutoffHour: lateCutoffHour,
           latePostPromptCutoffMinute: lateCutoffMinute,
+          courierCheckIntervalMinutes: courierCheckInterval,
         }),
       });
       refreshAppSettings();
@@ -799,10 +802,28 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
                     <span className="text-[11px] text-[#8a7a5c]">PM</span>
                   </div>
                 )}
+
+                <div className="border-t border-[#241f17] mt-3 pt-3">
+                  <p className="text-[11px] text-[#6b6152] mb-2">
+                    কুরিয়ার স্ট্যাটাস চেক (Facebook/WooCommerce সিঙ্ক) — প্রতি কত মিনিট পরপর চেক হবে
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={5}
+                      max={1440}
+                      value={courierCheckInterval}
+                      onChange={(e) => setCourierCheckInterval(Number(e.target.value))}
+                      className="w-20 bg-[#17140f] border border-[#3a3226] rounded-lg px-2 py-1.5 text-sm text-center"
+                    />
+                    <span className="text-[11px] text-[#8a7a5c]">মিনিট</span>
+                  </div>
+                </div>
+
                 <button
                   onClick={saveLateSettings}
                   disabled={savingLateSettings}
-                  className="w-full bg-[#b8935a] hover:bg-[#c9a56d] disabled:opacity-60 text-[#0f0d0a] font-medium text-sm py-2 rounded-lg"
+                  className="w-full bg-[#b8935a] hover:bg-[#c9a56d] disabled:opacity-60 text-[#0f0d0a] font-medium text-sm py-2 rounded-lg mt-3"
                 >
                   {savingLateSettings ? "সেভ হচ্ছে..." : "সেভ করুন"}
                 </button>
