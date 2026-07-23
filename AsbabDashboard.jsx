@@ -462,6 +462,8 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
   const [pageDeliveryNote, setPageDeliveryNote] = useState("");
   const [pageModeratorEmail, setPageModeratorEmail] = useState("");
   const [pageModeratorPassword, setPageModeratorPassword] = useState("");
+  const [pageFbPixelId, setPageFbPixelId] = useState("");
+  const [pageFbAccessToken, setPageFbAccessToken] = useState("");
   const [savingPage, setSavingPage] = useState(false);
 
   const [smsBalance, setSmsBalance] = useState([]);
@@ -531,6 +533,8 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
     setPageDeliveryNote("");
     setPageModeratorEmail("");
     setPageModeratorPassword("");
+    setPageFbPixelId("");
+    setPageFbAccessToken("");
   };
 
   const startEditPage = async (page) => {
@@ -553,6 +557,8 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
     setPageDeliveryNote(data.deliveryNote || "");
     setPageModeratorEmail(data.moderatorEmail || "");
     setPageModeratorPassword(data.moderatorPassword || "");
+    setPageFbPixelId(data.fbPixelId || "");
+    setPageFbAccessToken(data.fbAccessToken || "");
   };
 
   const updatePageAiCred = (index, field, value) => {
@@ -586,6 +592,8 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
         deliveryNote: pageDeliveryNote.trim(),
         moderatorEmail: pageModeratorEmail.trim(),
         moderatorPassword: pageModeratorPassword.trim(),
+        fbPixelId: pageFbPixelId.trim(),
+        fbAccessToken: pageFbAccessToken.trim(),
       });
       const res = editingPageId
         ? await authedFetch(`${API_BASE}/api/pages/${editingPageId}`, {
@@ -1018,6 +1026,23 @@ function SideDrawer({ open, onClose, auth, onLogout, authedFetch, appSettings, r
                     value={pageModeratorPassword}
                     onChange={(e) => setPageModeratorPassword(e.target.value)}
                     placeholder="Moderator Password"
+                    className="w-full bg-[#17140f] border border-[#3a3226] rounded-lg px-3 py-2 text-sm placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a]"
+                  />
+
+                  <p className="text-[10px] text-[#6b6152] mt-2">
+                    📘 Facebook Pixel/CAPI (ঐচ্ছিক) — Complete/Refund ইভেন্ট পাঠাতে ব্যবহার হবে
+                  </p>
+                  <input
+                    value={pageFbPixelId}
+                    onChange={(e) => setPageFbPixelId(e.target.value)}
+                    placeholder="Facebook Pixel ID"
+                    className="w-full bg-[#17140f] border border-[#3a3226] rounded-lg px-3 py-2 text-sm placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a]"
+                  />
+                  <input
+                    type="password"
+                    value={pageFbAccessToken}
+                    onChange={(e) => setPageFbAccessToken(e.target.value)}
+                    placeholder="Facebook Access Token"
                     className="w-full bg-[#17140f] border border-[#3a3226] rounded-lg px-3 py-2 text-sm placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a]"
                   />
 
