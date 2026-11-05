@@ -4525,6 +4525,9 @@ function CourierPendingScreen({ authedFetch, onBack, isAllowed = true }) {
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState({ loading: false, error: null, data: null });
   const [copiedId, setCopiedId] = useState(null);
+  const [noteText, setNoteText] = useState("");
+  const [noteSending, setNoteSending] = useState(false);
+  const [noteResult, setNoteResult] = useState(null);
 
   const load = async (force = false) => {
     if (force) setRefreshing(true);
@@ -4569,6 +4572,8 @@ function CourierPendingScreen({ authedFetch, onBack, isAllowed = true }) {
 
   const openDetail = async (item) => {
     window.history.pushState({ view: "courier_pending", cpDetail: true }, "", "");
+    setNoteText("");
+    setNoteResult(null);
     setSelected(item);
     setDetail({ loading: true, error: null, data: null });
     try {
@@ -4578,6 +4583,40 @@ function CourierPendingScreen({ authedFetch, onBack, isAllowed = true }) {
       setDetail({ loading: false, error: null, data: json });
     } catch (err) {
       setDetail({ loading: false, error: err.message || "ট্র্যাকিং তথ্য আনা যায়নি", data: null });
+    }
+  };
+
+  const loadDetailTracking = async (item) => {
+    const res = await authedFetch(`${API_BASE}/api/courier-pending/${item.parcelId}/tracking?pageId=${encodeURIComponent(item.pageId)}`);
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "ট্র্যাকিং তথ্য আনা যায়নি");
+    return json;
+  };
+
+  const sendNote = async () => {
+    if (!selected || !noteText.trim() || noteSending) return;
+    setNoteSending(true);
+    setNoteResult(null);
+    try {
+      const res = await authedFetch(`${API_BASE}/api/courier-pending/${selected.parcelId}/note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId: selected.pageId, note: noteText.trim() }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "নোট পাঠানো যায়নি");
+      setNoteResult({ ok: true, message: "✅ নোট পাঠানো হয়েছে" });
+      setNoteText("");
+      try {
+        const fresh = await loadDetailTracking(selected);
+        setDetail({ loading: false, error: null, data: fresh });
+      } catch {
+        // note was sent; refreshing the timeline is only a bonus
+      }
+    } catch (err) {
+      setNoteResult({ ok: false, message: `❌ ${err.message || "নোট পাঠানো যায়নি"}` });
+    } finally {
+      setNoteSending(false);
     }
   };
 
@@ -4709,6 +4748,17 @@ function CourierPendingScreen({ authedFetch, onBack, isAllowed = true }) {
                 <RiderPill status={i.riderStatus} />
               </div>
 
+              {i.customerPhone ? (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[19px] font-extrabold tracking-wide text-[#f2ede4] tabular-nums">{i.customerPhone}</span>
+                  <button onClick={(e) => copyId(e, i.customerPhone)} className="p-1.5 rounded-lg text-[#8a7a5c]" aria-label="Copy phone">
+                    {copiedId === i.customerPhone ? <Check size={17} className="text-emerald-400" /> : <Copy size={17} />}
+                  </button>
+                </div>
+              ) : i.customerPhone === undefined ? (
+                <p className="mt-1 text-[11px] text-[#5c5342] flex items-center gap-1.5"><Loader2 size={11} className="animate-spin" /> ফোন নাম্বার আনা হচ্ছে...</p>
+              ) : null}
+
               <p className="font-bengali font-bold text-[19px] text-[#f2ede4] mt-3 leading-snug">{i.name}</p>
               <p className="font-bengali text-[14px] text-[#a99d83] mt-1 leading-relaxed">{i.address}</p>
 
@@ -4798,6 +4848,45 @@ function CourierPendingScreen({ authedFetch, onBack, isAllowed = true }) {
                 ) : (
                   <p className="text-[12px] text-[#e0b45f] mb-4 font-bengali">এখনো কোনো রাইডার অ্যাসাইন হয়নি</p>
                 )}
+
+                {selected.lastRiderNote && (
+                  <div className="rounded-xl px-3 py-2 mb-3" style={{ background: "rgba(212,175,90,0.09)", border: "1px solid rgba(212,175,90,0.28)" }}>
+                    <p className="text-[10.5px] font-semibold text-[#d9b877] mb-0.5">🛵 রাইডারের লাস্ট নোট · {selected.lastRiderNote.date}, {selected.lastRiderNote.time}</p>
+                    <p className="font-bengali text-[13px] text-[#e6dcc4] leading-relaxed">{selected.lastRiderNote.text}</p>
+                  </div>
+                )}
+
+                <div className="mb-4 rounded-xl border border-[#3a3226] bg-[#17140f] p-3">
+                  <p className="text-[11px] text-[#d9b877] font-medium mb-2">📝 রাইডারকে নোট / রিপ্লাই</p>
+                  {noteResult && (
+                    <div
+                      className="rounded-lg px-3 py-2 mb-2 text-[12.5px] font-medium text-center font-bengali"
+                      style={
+                        noteResult.ok
+                          ? { background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.35)", color: "#6ee7b7" }
+                          : { background: "rgba(217,83,79,0.12)", border: "1px solid rgba(217,83,79,0.35)", color: "#e0837e" }
+                      }
+                    >
+                      {noteResult.message}
+                    </div>
+                  )}
+                  <textarea
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    rows={2}
+                    maxLength={500}
+                    placeholder="রাইডারের জন্য নোট লিখুন... (যেমন: কাস্টমারকে জানানো হয়েছে, আবার চেষ্টা করুন)"
+                    className="w-full bg-[#14110c] border border-[#3a3226] rounded-lg px-3 py-2 text-sm text-[#f2ede4] placeholder-[#5c5342] focus:outline-none focus:ring-1 focus:ring-[#b8935a] resize-none font-bengali"
+                  />
+                  <button
+                    onClick={sendNote}
+                    disabled={!noteText.trim() || noteSending}
+                    className="mt-2 w-full py-2.5 rounded-xl text-[13px] font-semibold disabled:opacity-50 flex items-center justify-center gap-1.5 bg-gradient-to-br from-[#f3cb6b] via-[#d89b2a] to-[#a3720f] text-[#1a1408]"
+                  >
+                    {noteSending ? <><Loader2 size={14} className="animate-spin" /> পাঠানো হচ্ছে (১০-২০ সেকেন্ড)...</> : "নোট পাঠান"}
+                  </button>
+                  <p className="text-[10.5px] text-[#6b6152] mt-2 font-bengali">⚠️ এটা Steadfast-এ পার্সেলের "Note" ঘরে লেখা হয় (আগের নোটের জায়গায়)।</p>
+                </div>
 
                 <p className="text-[11px] text-[#6b6152] mb-2">ট্র্যাকিং আপডেট</p>
                 <div className="space-y-2">
